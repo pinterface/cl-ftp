@@ -1,12 +1,13 @@
 ;;;; -*- Mode: Lisp -*-
 ;;;; Author: Matthew Danish <mrd@debian.org>
+;;;; Minor modifications: pinterface <pix@kepibu.org>
 ;;;; See LICENSE file for copyright details.
 
 (asdf:defsystem ftp
     :name "cl-ftp"
     :author "Matthew Danish <mdanish@andrew.cmu.edu>"
-    :version "1.3"
-    :maintainer "Matthew Danish <mdanish@andrew.cmu.edu>"
+    :version "1.3.1"
+    :maintainer "pinterface <pix@kepibu.org>"
     :licence "MIT/X style"
     :description "FTP library"
     :long-description "Provides FTP client functionality"
