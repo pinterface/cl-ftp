@@ -208,7 +208,7 @@ without ending up with a CR/CR/LF sequence."
 
 (defmethod send-raw-line ((conn ftp-connection) (line string))
   (with-ftp-connection-slots (conn)
-    (let ((line (format nil "~A~C~C" line #\Return #\Newline)))
+    (let ((line (format nil "~A~C~C" line #\Return #\Linefeed)))
       (log-session conn line)
       (write-string line socket))
     (force-output socket)
