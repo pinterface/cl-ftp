@@ -161,6 +161,19 @@
       (expect-code-or-lose conn 230))
     (values)))
 
+;; FIXME: Does this in any way interfere with FTP's Unix/DOS line-ending conversion?
+#+clisp
+(defmethod connect-to-server :around ((conn ftp-connection))
+  "clisp considers #\Linefeed and #\Newline to be identical, including conversion
+to CRLF for :DOS line-endings.  This is a hack to let us say #\Return #\Linefeed
+without ending up with a CR/CR/LF sequence."
+  ;; custom:*default-file-encoding* is a symbol-macro and thus can not be bound
+  ;; by let, hence the use of clisp's letf, which binds places.
+  (ext:letf ((custom:*default-file-encoding*
+              (ext:make-encoding :charset (ext:encoding-charset custom:*default-file-encoding*)
+                                 :line-terminator :unix)))
+    (call-next-method)))
+
 (defmacro with-ftp-connection ((conn &key hostname port username password passive-ftp-p session-stream (code-cut-off-p t code-cut-off-p-p) (if-failed :error)) &body body)
   `(let ((,conn (make-instance 'ftp-connection
                                ,@(if hostname `(:hostname ,hostname) ())
