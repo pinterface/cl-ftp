@@ -1,0 +1,150 @@
+;;;; -*- Mode: Lisp -*-
+;;;; Author: Matthew Danish <mrd@debian.org>
+;;;; See LICENSE file for copyright details.
+;;;; CL-FTP API documentation
+
+(defpackage #:org.mapcar.ftp.client.docs
+  (:use #:common-lisp #:lml))
+
+(in-package #:org.mapcar.ftp.client.docs)
+
+(defmacro api-list (&body body)
+  `(ul ,@(loop for item in body collect `(li ,item))))
+
+(defun stringify (x)
+  (let ((*print-case* :downcase))
+    (if (null x)
+        "()"
+        (format nil "~A" x))))
+
+(defmacro with-class-info ((class-name superclasses &rest slot-docs) &body other-info)
+  `(p (i "Class ") (b ,(stringify class-name))
+    (i " derived from ") ,(stringify superclasses) " -- " (br)
+    (i "Initargs:") (br)
+    (ul
+     ,@(loop for (slot-name slot-desc slot-default) in slot-docs collect
+             `(li (tt ,(format nil ":~A" slot-name))
+               " -- " ,slot-desc " -- " (i "Default: ")
+               ,(if (eql slot-default :n/a)
+                    "Not specified"
+                    (format nil "~S" slot-default)))))
+    ,@other-info))
+
+(defmacro with-macro-info ((macro-name &rest lambda-list) &body other-info)
+  `(p (i "Macro ") (b ,(stringify macro-name)) " "
+    (tt ,(stringify lambda-list)) (br)
+    ,@other-info))
+
+(defmacro with-function-info ((function-name &rest lambda-list) &body other-info)
+  `(p (i "Function ") (b ,(stringify function-name)) " "
+    (tt ,(stringify lambda-list))
+    (br) ,@other-info))
+
+(defmacro with-condition-info ((condition-name supers &rest slot-docs) &body other-info)
+  `(p (i "Condition ") (b ,(stringify condition-name))
+    (i " derived from ") ,(stringify supers) " -- " (br)
+    (i "Slots:") (br)
+    (ul
+     ,@(loop for (slot-name slot-desc slot-reader slot-initarg slot-default) in slot-docs collect
+             `(li (tt ,(stringify slot-name))
+               " -- " ,slot-desc " -- " (i " Default: ")
+               ,(if (eql slot-default :n/a)
+                    "Not specified"
+                    (format nil "~S" slot-default)))))
+    ,@other-info))
+
+(defmacro with-ftp-connection-functions (&rest slots)
+  `(progn ,@(loop for (fn description . args) in slots collect
+                  `(with-function-info (,fn ,@(if args args 
+                                                 '(connection-variable)))
+                    ,description))))
+
+(page
+ api
+ (head
+  (title "CL-FTP API"))
+ (body
+  (h1 "Overview")
+  (p "CL-FTP is a library which provides FTP client functionality to a Common Lisp program.  CL-FTP uses the ACL-COMPAT package for network sockets and the SPLIT-SEQUENCE package for some parsing needs.")
+  (h1 "License")
+  (p "This software, and documentation, is (c) 2002 Matthew Danish.  Redistribution and modification is permitted under a MIT-style license.  See the LICENSE file for more details.")
+  (h1 "Programmers Interface")
+  (api-list
+   (with-class-info (ftp-connection
+                     ()
+                     (:hostname "The remote hostname" :n/a)
+                     (:port "The remote port" 21)
+                     (:username "The login username" "anonymous")
+                     (:password "The login password" "cl-ftp@cclan.net")
+                     (:passive-ftp-p "Use passive FTP if non-nil" nil)
+                     (:session-stream "Send FTP session output to this stream, if non-nil" nil)
+                     (:code-cut-off-p "When non-nil, cut-off FTP codes in logging output" t))
+     "Represents an FTP connection and associated state.  The INITIALIZE-INSTANCE :AFTER method takes care of connection and login, if possible.")
+   (with-ftp-connection-functions
+       (ftp-hostname "The remote hostname")
+     (ftp-port "The remote port")
+     (ftp-username "The login username")
+     (ftp-password "The login password")
+     (ftp-session-stream "The session stream for the FTP connection")
+     (passive-ftp-p "Non-nil iff given FTP connection is to use passive FTP for data transfers")
+     ((setf passive-ftp-p) "Value should be non-nil to use passive FTP for data transfers with the given FTP connection" value connection-variable)
+     (code-cut-off-p "Non-nil iff FTP codes are to be cut-off when logging")
+     ((setf code-cut-off-p) "Alter value of code-cut-off-p" value connection-variable))
+   (with-condition-info (ftp-error
+                         ()
+                         (ftp-error-code "Code associated with message" ftp-error-code :ftp-error-code :n/a)
+                         (error-message "FTP server's error message" error-message :error-message :n/a))
+     )
+   (with-condition-info (invalid-code
+                         (ftp-error)
+                         (expected "Expected code" expected :expected :n/a)
+                         (received "Received code" received :received :n/a))
+     )
+   (with-condition-info (transient-negative-completion
+                         (ftp-error))
+     "Signalled when a transient error is received from the FTP server.  This means that the input was fine, but something else went wrong.  Feel free to resend.")
+   (with-condition-info (permanent-negative-completion
+                         (ftp-error))
+     "Signalled when a permanent error is received from the FTP server.  This means that the input was not acceptable and should not be re-sent.")
+   (with-function-info (connect-to-server connection-variable)
+     "Attempts to connect to the server using the information provided by connection-variable.  If connection-variable represents an existing connection, then that connection will be closed and a new one established.")
+   (with-function-info (close-connection connection-variable)
+     "Closes the given FTP connection")
+   (with-macro-info (with-ftp-connection (connection-variable &key hostname port username password passive-ftp-p session-stream (if-failed :error)) &body body)
+     "Opens and ensures proper close of an FTP connection.  Binds connection-variable to the FTP-CONNECTION object in the scope of body.  Arguments are similar to that of the initargs for the class FTP-CONNECTION.")
+   (with-macro-info (with-transfer-socket (transfer-socket connection-variable command-string &key rest (type :binary)) &body body)
+     "Opens a data transfer socket in the scope of body, using the given FTP connection and executing the given FTP command-string.  If :REST is specified, then the FTP \"REST\" command will be sent with the value of the argument.  :TYPE may be :BINARY or :ASCII.  Closes the transfer-socket upon dynamic exit of body.")
+   (with-function-info (call-with-transfer-socket connection-variable command-string function &key rest (type :binary))
+     "Similar to WITH-TRANSFER-SOCKET, except that function is a function which accepts a single argument; namely the transfer-socket")
+   (with-function-info (retrieve-file connection-variable remote local &key (type :binary) rest)
+     "Retrieves a file given a remote filename, and a local filename or stream.  :TYPE is either :ASCII or :BINARY, and :REST specifies an integer amount to seek into the file before retrieving it.")
+   (with-function-info (store-file connection-variable local remote &key (type :binary))
+     "Stores a file given a local filename or stream and a remote filename.  :TYPE is either :ASCII or :BINARY.")
+   (with-function-info (receive-response connection-variable &key (block nil))
+     "Receives a response from the FTP server.  Returns a list of strings as the first value and the response code as the second.  If :BLOCK is T, then will block until response received.  Otherwise return NIL if nothing is available currently.")
+   (with-function-info (data-to-string data-list)
+     "Converts a list of strings, such as that produced by receive-response, to one string with newlines after each formerly-list-element.")
+   (with-function-info (data-ready-p connection-variable)
+     "Non-nil iff data is waiting to be read from the control connection.")
+   (with-function-info (send-list-command connection-variable output &optional (pathname "."))
+     "Sends the FTP LIST command.  If OUTPUT is NIL, returns a string.  If OUTPUT is T, prints to *standard-output*.  Otherwise, it treats OUTPUT as the output stream.")
+   (with-function-info (send-nlst-command connection-variable output &optional (pathname "."))
+     "Sends the FTP NLST command.  If OUTPUT is NIL, returns a string.  If OUTPUT is T, prints to *standard-output*.  Otherwise, it treats OUTPUT as the output stream.")
+   (with-function-info (retrieve-filename-list connection-variable &optional (pathname "."))
+     "Retrieves a list of filenames for the given pathname.")
+   (with-function-info (retrieve-file-info-list connection-variable &optional (pathname "."))
+     "Retrieves a list of the form (type name) where type is :DIRECTORY or :FILE and name is a filename in the given directory named by pathname.  Note: this is implemented by attempting CWDs, and may break if the FTP server does strange things.") 
+   (with-function-info (send-size-command connection-variable remote-filename)
+     "Sends the FTP SIZE command on the given remote-filename.  Returns an integer size.  Signals error if no such file.")
+   (with-function-info (send-cwd-command connection-variable remote-directory)
+     "Sends the FTP CWD command, to change to the given remote-directory.  If remote-directory is \"..\", CDUP is sent instead.  Signals error if not possible.")
+   (with-function-info (send-cdup-command connection-variable)
+     "Sends the FTP CDUP command.")
+   (with-function-info (send-pwd-command connection-variable)
+     "Sends the FTP PWD command and returns the current working directory as a string.")
+   (with-function-info (send-mkd-command connection-variable remote-directory)
+     "Sends the FTP MKD command to make a remote directory.  Returns directory name as string.  Signals error if not possible."))
+  (h1 "Examples")
+  (p (tt "(with-ftp-connection (conn :hostname \"foo\") (retrieve-file conn \"bar\" \"baz\"))"))
+  (p "Further examples should be included with your copy of this software.  See simple-client.lisp for a simple FTP client written with CL-FTP.")))
+
