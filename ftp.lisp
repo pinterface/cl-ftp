@@ -8,7 +8,7 @@
   (require :sock)) ; just in case
 
 (defpackage #:org.mapcar.ftp.client
-  (:use #:common-lisp #:socket #:split-sequence)
+  (:use #:common-lisp #:acl-socket #:split-sequence)
   (:nicknames #:ftp.client #:ftp)
   (:export #:ftp-connection
            #:with-ftp-connection
