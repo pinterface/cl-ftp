@@ -220,7 +220,7 @@ without ending up with a CR/CR/LF sequence."
 
 (defun clean-ftp-response (data)
   (mapcar #'(lambda (line)
-              (string-trim '(#\Return #\Newline)
+              (string-trim '(#\Return #\Linefeed #\Newline)
                            line))
           data))
 
