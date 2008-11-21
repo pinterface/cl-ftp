@@ -467,6 +467,10 @@ without ending up with a CR/CR/LF sequence."
         ,@body)
       (export ',name))))
 
+(def-simple-command dele (conn (remote-filename string))
+  (send-raw-line conn (format nil "DELE ~A" remote-filename))
+  (expect-code-or-lose conn 250))
+
 (def-simple-command size (conn (remote-filename string))
   (send-raw-line conn (format nil "SIZE ~A" remote-filename))
   (parse-integer (first (expect-code-or-lose conn 213))))
