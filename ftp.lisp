@@ -242,33 +242,26 @@ without ending up with a CR/CR/LF sequence."
   (with-ftp-connection-slots (conn)
     (when (and (not block) (not (data-ready-p conn)))
       (return-from receive-response nil))
-    (let* ((initial-line (read-line socket))
-           (ftp-code (parse-integer initial-line :end 3))
-           (continue-p (char= (char initial-line 3) #\-))
-           (lines (list (if code-cut-off-p
-                            (subseq initial-line 4)
-                            initial-line))))
-      (loop while continue-p
-            for line = (read-line socket)
-            for line-length = (length line)
-            for line-code = (when (> line-length 3)
-                              (parse-integer line :end 3
-                                             :junk-allowed t))
-            do
-            (push (if (and code-cut-off-p (eql line-code ftp-code))
-                      (subseq line 4) ;; cut-off the code, if present
-                      line)
-                  lines)
-            ;; continue until reaching a line that begins with the code
-            ;; and has a #\Space after it
-            (when (and (eql line-code ftp-code)
-                       (char= #\Space (char line 3)))
-              (setf continue-p nil)))
-      
-      (let ((data (clean-ftp-response (nreverse lines))))
-        (log-session conn data)
-        (values (maybe-cut-off-code code-cut-off-p data ftp-code)
-                ftp-code)))))
+    (loop :with initial-line = (read-line socket)
+          :with ftp-code = (parse-integer initial-line :end 3)
+          :for line = initial-line :then (read-line socket)
+          :for line-code = ftp-code :then
+                           (when (> (length line) 3)
+                             (parse-integer line :end 3
+                                            :junk-allowed t))
+          :when (and code-cut-off-p (eql line-code ftp-code))
+            :collect (subseq line 4) :into lines
+          :else
+            :collect line :into lines
+          :end
+          :until (and (eql line-code ftp-code)
+                      (char= (char line 3) #\Space))
+          :finally (let ((data (clean-ftp-response lines)))
+                     (log-session conn data)
+                     (return (values (maybe-cut-off-code code-cut-off-p
+                                                         data
+                                                         ftp-code)
+                                     ftp-code))))))
 
 (defmethod send-port-command ((conn ftp-connection) (ip string) (port-num integer))
   (multiple-value-bind (quot rem)
