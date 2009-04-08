@@ -1,17 +1,14 @@
 ;;;; -*- Mode: Lisp -*-
-;;;; Author: Matthew Danish <mrd@debian.org>
+;;;; Authors:
+;;;; * Matthew Danish <mrd@debian.org>
+;;;; * Hans Hübner
 ;;;; See LICENSE file for copyright details.
 ;;;; FTP client functionality
-
-#+allegro
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (require :sock)) ; just in case
 
 (defpackage #:org.mapcar.ftp.client
   (:use #:common-lisp
         #:split-sequence
-        #+allegro #:socket
-        #-allegro #:acl-socket)
+        #:usocket)
   (:nicknames #:ftp.client #:ftp)
   (:export #:ftp-connection
            #:with-ftp-connection
@@ -149,9 +146,9 @@
   (with-ftp-connection-slots (conn)
     (unless (and hostname port (integerp port) (stringp hostname))
       (error "You must specify a hostname string and an integer port"))
-    (when (and (slot-boundp conn 'socket) (streamp socket))
-      (close socket))
-    (setf socket (make-socket :remote-host hostname :remote-port port))
+    (when (and (slot-boundp conn 'socket) (streamp (socket-stream socket)))
+      (close (socket-stream socket)))
+    (setf socket (socket-connect hostname port))
     (unless socket
       (error "Error connecting to ~A:~A" hostname port))
     (when (and username password (stringp username) (stringp password))
@@ -207,19 +204,19 @@ without ending up with a CR/CR/LF sequence."
 
 (defmethod close-connection ((conn ftp-connection))
   (with-ftp-connection-slots (conn)
-    (close socket)))
+    (close (socket-stream socket))))
 
 (defmethod send-raw-line ((conn ftp-connection) (line string))
   (with-ftp-connection-slots (conn)
     (let ((line (format nil "~A~C~C" line #\Return #\Linefeed)))
       (log-session conn line)
-      (write-string line socket))
-    (force-output socket)
+      (write-string line (socket-stream socket)))
+    (force-output (socket-stream socket))
     (values)))
 
 (defmethod data-ready-p ((conn ftp-connection))
   (with-ftp-connection-slots (conn)
-    (listen socket)))
+    (listen (socket-stream socket))))
 
 (defun clean-ftp-response (data)
   (mapcar #'(lambda (line)
@@ -242,9 +239,9 @@ without ending up with a CR/CR/LF sequence."
   (with-ftp-connection-slots (conn)
     (when (and (not block) (not (data-ready-p conn)))
       (return-from receive-response nil))
-    (loop :with initial-line = (read-line socket)
+    (loop :with initial-line = (read-line (socket-stream socket))
           :with ftp-code = (parse-integer initial-line :end 3)
-          :for line = initial-line :then (read-line socket)
+          :for line = initial-line :then (read-line (socket-stream socket))
           :for line-code = ftp-code :then
                            (when (> (length line) 3)
                              (parse-integer line :end 3
@@ -289,17 +286,16 @@ without ending up with a CR/CR/LF sequence."
                   (+ (ash (parse-integer (fifth numbers)) 8)
                      (parse-integer (sixth numbers)))))))))
 
-(defmethod setup-port ((conn ftp-connection) &key (format :binary))
+(defmethod setup-port ((conn ftp-connection) &key (element-type '(unsigned-byte 8)))
   (with-ftp-connection-slots (conn)
     (let ((server-socket
            (loop for p = (+ 1025 (random 10000))
                  for s = (ignore-errors
-                           (make-socket :connect :passive
-                                        :local-port p
-                                        :format format))
+                           (socket-listen :port p
+                                          :element-type element-type))
                  when s return s))
-          (local-ip (ipaddr-to-dotted (local-host socket))))
-      (send-port-command conn local-ip (local-port server-socket))
+          (local-ip (get-local-name socket)))
+      (send-port-command conn local-ip (get-local-port server-socket))
       server-socket)))
 
 (defmethod establish-data-transfer ((conn ftp-connection) (command string) &key (rest nil) (type :binary))
@@ -314,29 +310,28 @@ without ending up with a CR/CR/LF sequence."
            (multiple-value-bind (dtp-hostname dtp-port)
                (receive-pasv-response conn)
              (let ((data-socket
-                    (make-socket :remote-host dtp-hostname
-                                 :remote-port dtp-port
-                                 :format (ecase type
-                                           ((:binary :image) :binary)
-                                           (:ascii :text)))))
+                    (socket-connect dtp-hostname dtp-port
+                                    :element-type (ecase type
+                                                    ((:binary :image) '(unsigned-byte 8))
+                                                    (:ascii 'character)))))
                (when (and rest (integerp rest))
                  (send-raw-line conn (format nil "REST ~A" rest)))
                (send-raw-line conn command)
                data-socket)))
           (t
-           (let ((server-socket (setup-port conn
-                                            :format (ecase type
-                                                      ((:binary :image)
-                                                       :binary)
-                                                      (:ascii :text)))))
+           (let ((server-socket (socket-listen *wildcard-host* port
+                                               :element-type (ecase type
+                                                               ((:binary :image)
+                                                                '(unsigned-byte 8))
+                                                               (:ascii 'character)))))
              (unwind-protect
                   (progn
                     (when (and rest (integerp rest))
                       (send-raw-line conn (format nil "REST ~A" rest)))
                     (expect-code-or-lose conn 200)
                     (send-raw-line conn command)
-                    (accept-connection server-socket))
-               (close server-socket)))))))
+                    (socket-accept server-socket))
+               (close (socket-stream server-socket))))))))
 
 (defmethod flush-response ((conn ftp-connection))
   (loop while (receive-response conn)))
@@ -348,7 +343,7 @@ without ending up with a CR/CR/LF sequence."
     (unwind-protect
          (funcall fn transfer-socket)
       (progn
-        (close transfer-socket)
+        (close (socket-stream transfer-socket))
         (loop
          (multiple-value-bind (data code)
              (receive-response conn)
@@ -372,7 +367,7 @@ without ending up with a CR/CR/LF sequence."
 
 (defmethod send-list-command ((conn ftp-connection) (output stream) &optional (pathname "."))
   (flet ((read-all (s)
-           (loop (handler-case (write-line (read-line s) output)
+           (loop (handler-case (write-line (read-line (socket-stream s)) output)
                    (end-of-file () (return (values)))))))
     (with-transfer-socket (s conn (format nil "LIST ~A" pathname)
                              :type :ascii)
@@ -387,7 +382,7 @@ without ending up with a CR/CR/LF sequence."
 
 (defmethod send-nlst-command ((conn ftp-connection) (output stream) &optional (pathname "."))
   (flet ((read-all (s)
-           (loop (handler-case (write-line (read-line s) output)
+           (loop (handler-case (write-line (read-line (socket-stream s)) output)
                    (end-of-file () (return (values)))))))
     (with-transfer-socket (s conn (format nil "NLST ~A" pathname)
                              :type :ascii)
@@ -417,9 +412,11 @@ without ending up with a CR/CR/LF sequence."
            (send-cwd-command conn base-dir))
       (send-cwd-command conn orig-dir))))
 
-(defmethod retrieve-file ((conn ftp-connection) (remote-filename string) local-filename &key (type :binary) (rest nil))
+(defmethod retrieve-file ((conn ftp-connection) (remote-filename string) local-filename
+                          &key (type :binary) (rest nil) (if-exists :error))
   (with-open-file (local-stream local-filename
                                 :direction :output
+                                :if-exists if-exists
                                 :element-type (ecase type
                                                 ((:binary :image)
                                                  '(unsigned-byte 8))
@@ -433,9 +430,9 @@ without ending up with a CR/CR/LF sequence."
     (handler-case
         (ecase type
           ((:binary :image)
-           (loop (write-byte (read-byte s) local-stream)))
+           (loop (write-byte (read-byte (socket-stream s)) local-stream)))
           (:ascii
-           (loop (write-char (read-char s) local-stream))))
+           (loop (write-char (read-char (socket-stream s)) local-stream))))
       (end-of-file () (values)))))
 
 (defmethod store-file ((conn ftp-connection) local-filename (remote-filename string) &key (type :binary) (rest nil))
@@ -454,9 +451,9 @@ without ending up with a CR/CR/LF sequence."
     (handler-case
         (ecase type
           ((:binary :image)
-           (loop (write-byte (read-byte local-stream) s)))
+           (loop (write-byte (read-byte local-stream) (socket-stream s))))
           (:ascii
-           (loop (write-char (read-char local-stream) s))))
+           (loop (write-char (read-char local-stream) (socket-stream s)))))
       (end-of-file () (values)))))
 
 (defmacro def-simple-command (cmd (conn &rest args) &body body)
