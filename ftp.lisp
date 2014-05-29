@@ -412,6 +412,8 @@ without ending up with a CR/CR/LF sequence."
            (send-cwd-command conn base-dir))
       (send-cwd-command conn orig-dir))))
 
+(defgeneric retrieve-file (conn remote-filename local-file &key type rest &allow-other-keys))
+
 (defmethod retrieve-file ((conn ftp-connection) (remote-filename string) local-filename
                           &key (type :binary) (rest nil) (if-exists :error))
   (with-open-file (local-stream local-filename
