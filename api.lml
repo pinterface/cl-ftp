@@ -65,7 +65,7 @@
   (title "CL-FTP API"))
  (body
   (h1 "Overview")
-  (p "CL-FTP is a library which provides FTP client functionality to a Common Lisp program.  CL-FTP uses the ACL-COMPAT package for network sockets and the SPLIT-SEQUENCE package for some parsing needs.")
+  (p "CL-FTP is a library which provides FTP client functionality to a Common Lisp program.  CL-FTP uses the USOCKET package for network sockets and the SPLIT-SEQUENCE package for some parsing needs.")
   (h1 "License")
   (p "This software, and documentation, is (c) 2002 Matthew Danish.  Redistribution and modification is permitted under a MIT-style license.  See the LICENSE file for more details.")
   (h1 "Programmers Interface")
