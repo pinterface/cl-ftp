@@ -14,6 +14,23 @@ SPLIT-SEQUENCE package for some parsing needs.
 Further examples should be included with your copy of this software.  See
 simple-client.lisp for a simple FTP client written with CL-FTP.
 
+* #'RETRIEVE-FILE / #'STORE-FILE hang or don't work
+
+ * Short answer :: Use passive FTP.
+
+ * Long answer :: FTP is something of a weird protocol, and this tends to trip
+   people up—FTP opens up two connections, one for commands, and one for data
+   (file transfers).  The data channel can be opened in two different ways: in
+   "active" mode (the default), the client tells the server "hey, connect to me
+   on port X", and then the server actually opens the connection to the client;
+   in "passive" mode, the client connects to the server.
+
+   As you might imagine, active mode does not play well with NAT or firewalls,
+   and this is usually the problem when commands work, but files fail to
+   download. Most likely, including =:passive-ftp-p t= in your
+   =WITH-FTP-CONNECTION= or =(make-instance 'ftp-connection)= form will get you
+   going.
+
 * License
 
 This software, and documentation, is (c) 2002 Matthew Danish.  Redistribution
