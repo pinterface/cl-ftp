@@ -43,84 +43,83 @@
 
 (in-package #:org.mapcar.ftp.client)
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (define-condition ftp-error ()
-    ((ftp-error-code :initarg :ftp-error-code
-                     :initform "\"unspecified\""
-                     :reader ftp-error-code
-                     :documentation "Code associated with message")
-     (error-message :initarg :error-message
-                    :initform "\"unspecified\""
-                    :reader error-message
-                    :documentation "FTP server's error message"))
-    (:report (lambda (c s)
-               (format s "FTP error ~A raised: ~A"
-                       (ftp-error-code c)
-                       (error-message c)))))
+(define-condition ftp-error ()
+  ((ftp-error-code :initarg :ftp-error-code
+                   :initform "\"unspecified\""
+                   :reader ftp-error-code
+                   :documentation "Code associated with message")
+   (error-message :initarg :error-message
+                  :initform "\"unspecified\""
+                  :reader error-message
+                  :documentation "FTP server's error message"))
+  (:report (lambda (c s)
+             (format s "FTP error ~A raised: ~A"
+                     (ftp-error-code c)
+                     (error-message c)))))
 
-  (define-condition invalid-code (ftp-error)
-    ((expected :reader expected :initarg :expected
-               :documentation "Expected code")
-     (received :reader received :initarg :received
-               :documentation "Received code"))
-    (:report (lambda (c s)
-               (format s "Expected FTP code ~A, got FTP code ~A"
-                       (expected c)
-                       (received c)))))
-  
-  (define-condition transient-negative-completion (ftp-error)
-    ()
-    (:report (lambda (c s)
-               (format s "Received transient error code ~A: ~A"
-                       (ftp-error-code c)
-                       (error-message c))))
-    (:documentation "Signalled when a transient error is received from the FTP server.  This means that the input was fine, but something else went wrong.  Feel free to resend."))
+(define-condition invalid-code (ftp-error)
+  ((expected :reader expected :initarg :expected
+             :documentation "Expected code")
+   (received :reader received :initarg :received
+             :documentation "Received code"))
+  (:report (lambda (c s)
+             (format s "Expected FTP code ~A, got FTP code ~A"
+                     (expected c)
+                     (received c)))))
 
-  (define-condition permanent-negative-completion (ftp-error)
-    ()
-    (:report (lambda (c s)
-               (format s "Received permanent error code ~A: ~A"
-                       (ftp-error-code c)
-                       (error-message c))))
-    (:documentation "Signalled when a permanent error is received from the FTP server.  This means that the input was not acceptable and should not be re-sent."))
-  
-  (defclass ftp-connection ()
-    ((hostname :initarg :hostname
-               :reader ftp-hostname
-               :documentation "The remote hostname")
-     (port :initarg :port :initform 21
-           :reader ftp-port
-           :documentation "The remote port")
-     (username :initarg :username :initform "anonymous"
-               :reader ftp-username
-               :documentation "The login username")
-     (password :initarg :password :initform "cl-ftp@cclan.net"
-               :reader ftp-password
-               :documentation "The login password")
-     (session-stream :initarg :session-stream :initform nil
-                     :reader ftp-session-stream
-                     :documentation "Send FTP session output to this stream, if non-nil")
-     (passive-ftp-p :initarg :passive-ftp-p :initform nil
-                    :accessor passive-ftp-p
-                    :documentation "Use passive FTP if non-nil")
-     (code-cut-off-p :initarg :code-cut-off-p :initform t
-                     :accessor code-cut-off-p
-                     :documentation "When non-nil, cut-off FTP codes in logging output")
-     (socket))
-    (:documentation "Represents an FTP connection and associated state.  The INITIALIZE-INSTANCE :AFTER method takes care of connection and login, if possible."))
+(define-condition transient-negative-completion (ftp-error)
+  ()
+  (:report (lambda (c s)
+             (format s "Received transient error code ~A: ~A"
+                     (ftp-error-code c)
+                     (error-message c))))
+  (:documentation "Signalled when a transient error is received from the FTP server.  This means that the input was fine, but something else went wrong.  Feel free to resend."))
 
-  (defmacro %doc-fns (&rest list)
-    `(progn ,@(loop :for (sym doc) :on list :by #'cddr
-                    :collect `(setf (documentation ',sym 'function) ',doc))))
-  (%doc-fns ftp-hostname "The remote hostname"
-            ftp-port "The remote port"
-            ftp-username "The login username"
-            ftp-password "The login password"
-            ftp-session-stream "The session stream for the FTP connection"
-            passive-ftp-p "Non-nil iff given FTP connection is to use passive FTP for data transfers"
-            (setf passive-ftp-p) "Value should be non-nil to use passive FTP for data transfers with the given FTP connection"
-            code-cut-off-p "Non-nil iff FTP codes are to be cut-off when logging"
-            (setf code-cut-off-p) "Alter value of code-cut-off-p"))
+(define-condition permanent-negative-completion (ftp-error)
+  ()
+  (:report (lambda (c s)
+             (format s "Received permanent error code ~A: ~A"
+                     (ftp-error-code c)
+                     (error-message c))))
+  (:documentation "Signalled when a permanent error is received from the FTP server.  This means that the input was not acceptable and should not be re-sent."))
+
+(defclass ftp-connection ()
+  ((hostname :initarg :hostname
+             :reader ftp-hostname
+             :documentation "The remote hostname")
+   (port :initarg :port :initform 21
+         :reader ftp-port
+         :documentation "The remote port")
+   (username :initarg :username :initform "anonymous"
+             :reader ftp-username
+             :documentation "The login username")
+   (password :initarg :password :initform "cl-ftp@cclan.net"
+             :reader ftp-password
+             :documentation "The login password")
+   (session-stream :initarg :session-stream :initform nil
+                   :reader ftp-session-stream
+                   :documentation "Send FTP session output to this stream, if non-nil")
+   (passive-ftp-p :initarg :passive-ftp-p :initform nil
+                  :accessor passive-ftp-p
+                  :documentation "Use passive FTP if non-nil")
+   (code-cut-off-p :initarg :code-cut-off-p :initform t
+                   :accessor code-cut-off-p
+                   :documentation "When non-nil, cut-off FTP codes in logging output")
+   (socket))
+  (:documentation "Represents an FTP connection and associated state.  The INITIALIZE-INSTANCE :AFTER method takes care of connection and login, if possible."))
+
+(defmacro %doc-fns (&rest list)
+  `(progn ,@(loop :for (sym doc) :on list :by #'cddr
+                  :collect `(setf (documentation ',sym 'function) ',doc))))
+(%doc-fns ftp-hostname "The remote hostname"
+          ftp-port "The remote port"
+          ftp-username "The login username"
+          ftp-password "The login password"
+          ftp-session-stream "The session stream for the FTP connection"
+          passive-ftp-p "Non-nil iff given FTP connection is to use passive FTP for data transfers"
+          (setf passive-ftp-p) "Value should be non-nil to use passive FTP for data transfers with the given FTP connection"
+          code-cut-off-p "Non-nil iff FTP codes are to be cut-off when logging"
+          (setf code-cut-off-p) "Alter value of code-cut-off-p")
 
 (defmacro with-ftp-connection-slots ((conn) &body body)
   `(with-slots (socket hostname port username password session-stream passive-ftp-p code-cut-off-p) ,conn
