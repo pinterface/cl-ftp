@@ -33,6 +33,6 @@ simple-client.lisp for a simple FTP client written with CL-FTP.
 
 * License
 
-This software, and documentation, is (c) 2002 Matthew Danish.  Redistribution
+This software, and documentation, is copyright various authors.  Redistribution
 and modification is permitted under a MIT-style license.  See the LICENSE file
 for more details.
