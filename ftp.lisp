@@ -424,7 +424,9 @@ without ending up with a CR/CR/LF sequence."
                                                  '(unsigned-byte 8))
                                                 (:ascii
                                                  'character)))
-    (retrieve-file conn remote-filename local-stream :type type :rest rest)))
+    ;; if-exists can be nil, so we have to check if local-stream is non-nil
+    (when local-stream
+      (retrieve-file conn remote-filename local-stream :type type :rest rest))))
 
 (defmethod retrieve-file ((conn ftp-connection) (remote-filename string) (local-stream stream) &key (type :binary) (rest nil))
   (with-transfer-socket (s conn (format nil "RETR ~A" remote-filename)
