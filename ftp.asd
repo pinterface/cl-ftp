@@ -7,7 +7,7 @@
 (asdf:defsystem ftp
     :name "cl-ftp"
     :author "Matthew Danish <mdanish@andrew.cmu.edu>"
-    :version "1.5.2"
+    :version "1.6.0"
     :maintainer "pinterface <pix@kepibu.org>"
     :licence "MIT/X style"
     :description "FTP library"
