@@ -341,12 +341,8 @@ without ending up with a CR/CR/LF sequence."
 (defmethod setup-port ((conn ftp-connection) &key (element-type '(unsigned-byte 8)))
   (with-ftp-connection-slots (conn)
     (let ((server-socket
-           (loop for p = (+ 1025 (random 10000))
-                 for s = (ignore-errors
-                           (socket-listen :port p
-                                          :element-type element-type))
-                 when s return s))
-          (local-ip (get-local-name socket)))
+            (socket-listen *wildcard-host* *auto-port* :element-type element-type))
+          (local-ip (vector-quad-to-dotted-quad (get-local-name socket))))
       (send-port-command conn local-ip (get-local-port server-socket))
       server-socket)))
 
@@ -373,11 +369,10 @@ without ending up with a CR/CR/LF sequence."
                (send-raw-line conn command)
                data-socket)))
           (t
-           (let ((server-socket (socket-listen *wildcard-host* port
-                                               :element-type (ecase type
-                                                               ((:binary :image)
-                                                                '(unsigned-byte 8))
-                                                               (:ascii 'character)))))
+           (let ((server-socket (setup-port conn :element-type (ecase type
+                                                                 ((:binary :image)
+                                                                  '(unsigned-byte 8))
+                                                                 (:ascii 'character)))))
              (unwind-protect
                   (progn
                     (when (and rest (integerp rest))
@@ -385,7 +380,7 @@ without ending up with a CR/CR/LF sequence."
                     (expect-code-or-lose conn 200)
                     (send-raw-line conn command)
                     (socket-accept server-socket))
-               (close (socket-stream server-socket))))))))
+               (socket-close server-socket)))))))
 
 (defgeneric flush-response (conn))
 
