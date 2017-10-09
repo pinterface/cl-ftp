@@ -183,14 +183,18 @@
     (setf socket (socket-connect hostname port))
     (unless socket
       (error "Error connecting to ~A:~A" hostname port))
-    (when (and username password (stringp username) (stringp password))
+    (when (and username (stringp username))
       (expect-code-or-lose conn 220)
-      (send-raw-line conn
-                     (format nil "USER ~A" username))
-      (expect-code-or-lose conn 331)
-      (send-raw-line conn
-                     (format nil "PASS ~A" password))
-      (expect-code-or-lose conn 230))
+      (send-raw-line conn (format nil "USER ~A" username))
+      (if (and password (stringp password))
+          (multiple-value-bind (data code) (receive-response conn :block t)
+            (case code
+              (331
+               (send-raw-line conn (format nil "PASS ~A" password))
+               (expect-code-or-lose conn 230))
+              (230)
+              (otherwise (raise-ftp-error code (data-to-string data)))))
+          (expect-code-or-lose conn 230)))
     (values)))
 
 ;; FIXME: Does this in any way interfere with FTP's Unix/DOS line-ending conversion?
