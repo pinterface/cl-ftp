@@ -212,6 +212,8 @@ without ending up with a CR/CR/LF sequence."
 
 (defmacro with-ftp-connection ((conn &key hostname port username password passive-ftp-p session-stream (code-cut-off-p t code-cut-off-p-p) (if-failed :error)) &body body)
   "Opens and ensures proper close of an FTP connection.  Binds connection-variable to the FTP-CONNECTION object in the scope of body.  Arguments are similar to that of the initargs for the class FTP-CONNECTION."
+  (unless (eql if-failed :error)
+    (warn ":if-failed is not currently functional"))
   `(let ((,conn (make-instance 'ftp-connection
                                ,@(if hostname `(:hostname ,hostname) ())
                                ,@(if port `(:port ,port) ())
@@ -223,12 +225,8 @@ without ending up with a CR/CR/LF sequence."
                                      `(:session-stream ,session-stream) ())
                                ,@(if code-cut-off-p-p
                                      `(:code-cut-off-p ,code-cut-off-p) ()))))
-    (if (null ,conn)
-        (if (eql ,if-failed :error)
-            (error "Connection to ~A:~A failed" ,hostname ,port)
-            ,if-failed)
-        (unwind-protect (progn ,@body)
-          (close-connection ,conn)))))
+     (unwind-protect (progn ,@body)
+       (close-connection ,conn))))
 
 (defgeneric log-session (conn data))
 
